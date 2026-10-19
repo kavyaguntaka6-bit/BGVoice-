@@ -1,0 +1,59 @@
+# VoiceClean v2 — local dev / single-host deployment.
+#
+#   docker compose up --build
+#
+# Services:
+#   backend   FastAPI API on :8000 (built from ./Dockerfile).
+#   frontend  React UI on :5173 (built from ./frontend/Dockerfile, which is
+#             provided by the parallel frontend build; it is expected to
+#             serve the static production build and proxy /api to `backend`).
+#
+# Redis: deliberately omitted. The API uses FastAPI BackgroundTasks with a
+# SQLite job store (see backend/config.py: JOB_DB_PATH / JOB_TTL_S), which
+# needs no external broker. If you later need multi-worker job queues,
+# add a redis service and a worker that polls the jobs table.
+#
+# Volumes:
+#   model-cache  persists the pre-warmed DeepFilterNet3 / Silero VAD weights
+#                (~/.cache inside the image) across container recreations.
+#   job-data     persists uploads, results and jobs.sqlite3.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: voiceclean-v2-backend
+    ports:
+      - "8000:8000"
+    environment:
+      OMP_NUM_THREADS: "4"
+      JOB_DB_PATH: /data/jobs.sqlite3
+      UPLOAD_DIR: /data/uploads
+      RESULT_DIR: /data/results
+    volumes:
+      - model-cache:/app/.cache
+      - job-data:/data
+    restart: unless-stopped
+    healthcheck:
+      # FastAPI always serves /openapi.json; /api/jobs is POST-only.
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/openapi.json')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: voiceclean-v2-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  model-cache:
+  job-data:

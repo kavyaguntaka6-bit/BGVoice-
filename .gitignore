@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.venv312/
+venv/
+# Node
+node_modules/
+# Build outputs
+frontend/dist/
+# Runtime / temp
+backend/.tmp/
+*.log
+# OS
+.DS_Store
